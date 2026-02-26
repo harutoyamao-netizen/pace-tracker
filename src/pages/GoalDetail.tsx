@@ -40,7 +40,7 @@ export function GoalDetail() {
     for (let i = 13; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      days.push(d.toISOString().slice(0, 10))
+      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     }
     return db.records
       .where('goalId')
@@ -119,7 +119,7 @@ export function GoalDetail() {
               {goal.result === 'completed' ? '達成！' : '未達成'}
             </span>
             <button
-              onClick={() => handleMarkResult('active' as 'completed')}
+              onClick={() => handleMarkResult('active')}
               className="ml-auto text-xs underline opacity-60"
             >
               取消

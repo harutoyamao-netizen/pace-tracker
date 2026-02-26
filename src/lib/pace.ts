@@ -44,9 +44,9 @@ export function calcPace(
     const daysToFinish = Math.ceil(remaining / currentPace)
     const predicted = new Date(now)
     predicted.setDate(predicted.getDate() + daysToFinish)
-    predictedEndDate = predicted.toISOString().slice(0, 10)
+    predictedEndDate = `${predicted.getFullYear()}-${String(predicted.getMonth() + 1).padStart(2, '0')}-${String(predicted.getDate()).padStart(2, '0')}`
   } else if (remaining <= 0) {
-    predictedEndDate = now.toISOString().slice(0, 10)
+    predictedEndDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   }
 
   const idealPace = targetCount / totalDays

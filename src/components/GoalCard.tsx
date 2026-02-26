@@ -34,7 +34,7 @@ export function GoalCard({ goal, onNavigate }: Props) {
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
-      days.push(d.toISOString().slice(0, 10))
+      days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     }
     return db.records
       .where('goalId')
@@ -48,7 +48,8 @@ export function GoalCard({ goal, onNavigate }: Props) {
 
   const handleIncrement = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     await db.records.add({
       goalId: goal.id!,
       count: 1,

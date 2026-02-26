@@ -3,7 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Trash2 } from 'lucide-react'
 import { db, type Goal } from '../db'
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 const unitPresets = ['回', 'ページ', '冊', '問', 'km', '分', '時間', '個']
 

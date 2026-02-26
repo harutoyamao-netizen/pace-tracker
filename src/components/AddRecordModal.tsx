@@ -11,7 +11,10 @@ interface Props {
 export function AddRecordModal({ goalId, unit, onClose }: Props) {
   const [count, setCount] = useState('1')
   const [memo, setMemo] = useState('')
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })
 
   const handleSave = async () => {
     const c = Number(count)
