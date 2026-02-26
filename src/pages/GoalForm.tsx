@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Trash2 } from 'lucide-react'
-import { db, type Goal } from '../db'
+import { type Goal, getGoal, addGoal, updateGoal, deleteGoal } from '../db'
 
 const today = () => {
   const d = new Date()
@@ -24,7 +24,7 @@ export function GoalForm() {
 
   useEffect(() => {
     if (id) {
-      db.goals.get(Number(id)).then(g => {
+      getGoal(id).then(g => {
         if (g) {
           setName(g.name)
           setTargetCount(String(g.targetCount))
@@ -46,7 +46,7 @@ export function GoalForm() {
     if (repeat === 'none' && effectiveEnd < startDate) return
 
     if (isEdit) {
-      await db.goals.update(Number(id), {
+      await updateGoal(id!, {
         name: name.trim(),
         targetCount: count,
         unit,
@@ -55,7 +55,7 @@ export function GoalForm() {
         repeat,
       })
     } else {
-      await db.goals.add({
+      await addGoal({
         name: name.trim(),
         targetCount: count,
         unit,
@@ -71,8 +71,7 @@ export function GoalForm() {
 
   const handleDelete = async () => {
     if (!confirm('この目標を削除しますか？')) return
-    await db.records.where('goalId').equals(Number(id)).delete()
-    await db.goals.delete(Number(id))
+    await deleteGoal(id!)
     navigate('/', { replace: true })
   }
 

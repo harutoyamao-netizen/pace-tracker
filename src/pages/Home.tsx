@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Moon, Sun, Download, Upload, MoreVertical, ChevronDown } from 'lucide-react'
+import { Plus, Moon, Sun, Download, Upload, MoreVertical, ChevronDown, LogOut } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { db } from '../db'
+import { signOut } from 'firebase/auth'
+import { auth } from '../firebase'
 import { GoalCard } from '../components/GoalCard'
 import { calcPace } from '../lib/pace'
 import { getEffectiveDates } from '../lib/repeat'
 import { exportJSON, exportCSV, importJSON } from '../lib/export'
+import { useGoals, useAllRecords } from '../hooks/useFirestoreQuery'
 
 interface Props {
   dark: boolean
@@ -18,8 +19,8 @@ export function Home({ dark, toggleDark }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showFinished, setShowFinished] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
-  const goals = useLiveQuery(() => db.goals.orderBy('createdAt').toArray())
-  const allRecords = useLiveQuery(() => db.records.toArray())
+  const goals = useGoals()
+  const allRecords = useAllRecords()
 
   const activeGoals = goals?.filter(g => g.result === 'active' || !g.result) ?? []
   const finishedGoals = goals?.filter(g => g.result === 'completed' || g.result === 'missed') ?? []
@@ -50,6 +51,11 @@ export function Home({ dark, toggleDark }: Props) {
       alert('ファイルの読み込みに失敗しました')
     }
     e.target.value = ''
+  }
+
+  const handleLogout = async () => {
+    setMenuOpen(false)
+    await signOut(auth)
   }
 
   return (
@@ -93,6 +99,12 @@ export function Home({ dark, toggleDark }: Props) {
                       className="w-full px-4 py-3 text-left text-sm flex items-center gap-2 hover:bg-[var(--color-border)] transition-colors"
                     >
                       <Upload size={15} /> JSONインポート
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full px-4 py-3 text-left text-sm flex items-center gap-2 hover:bg-[var(--color-border)] transition-colors text-red-400"
+                    >
+                      <LogOut size={15} /> ログアウト
                     </button>
                   </div>
                 </>

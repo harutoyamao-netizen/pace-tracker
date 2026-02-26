@@ -1,4 +1,11 @@
-import { db } from '../db'
+import { collection, getDocs, addDoc, writeBatch } from 'firebase/firestore'
+import { firestore, auth } from '../firebase'
+
+function getUid(): string {
+  const user = auth.currentUser
+  if (!user) throw new Error('Not authenticated')
+  return user.uid
+}
 
 function download(content: string, filename: string, mime: string) {
   const blob = new Blob([content], { type: mime })
@@ -11,17 +18,27 @@ function download(content: string, filename: string, mime: string) {
 }
 
 export async function exportJSON() {
-  const goals = await db.goals.toArray()
-  const records = await db.records.toArray()
+  const uid = getUid()
+  const goalsSnap = await getDocs(collection(firestore, 'users', uid, 'goals'))
+  const recordsSnap = await getDocs(collection(firestore, 'users', uid, 'records'))
+
+  const goals = goalsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+  const records = recordsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+
   const data = { goals, records, exportedAt: new Date().toISOString() }
   const timestamp = new Date().toISOString().slice(0, 10)
   download(JSON.stringify(data, null, 2), `pace-tracker-${timestamp}.json`, 'application/json')
 }
 
 export async function exportCSV() {
-  const goals = await db.goals.toArray()
-  const records = await db.records.toArray()
-  const goalMap = new Map(goals.map(g => [g.id, g.name]))
+  const uid = getUid()
+  const goalsSnap = await getDocs(collection(firestore, 'users', uid, 'goals'))
+  const recordsSnap = await getDocs(collection(firestore, 'users', uid, 'records'))
+
+  const goalMap = new Map(goalsSnap.docs.map(d => [d.id, (d.data().name as string) ?? '']))
+  const records = recordsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as Array<{
+    id: string; goalId: string; date: string; count: number; memo: string
+  }>
 
   const header = 'date,goal_name,count,memo'
   const rows = records
@@ -44,26 +61,33 @@ export async function importJSON(file: File) {
     throw new Error('Invalid file format')
   }
 
-  await db.transaction('rw', db.goals, db.records, async () => {
-    await db.goals.clear()
-    await db.records.clear()
-    const addedIds = await db.goals.bulkAdd(
-      data.goals.map((g: { id?: unknown; [k: string]: unknown }) => {
-        const { id: _, ...rest } = g
-        return rest
-      }),
-      { allKeys: true },
-    )
-    // Re-map goal IDs using bulkAdd return values
-    const oldToNew = new Map<number, number>()
-    data.goals.forEach((old: { id: number }, i: number) => {
-      if (addedIds[i] != null) oldToNew.set(old.id, addedIds[i] as number)
-    })
-    await db.records.bulkAdd(
-      data.records.map((r: { id?: unknown; goalId?: unknown; [k: string]: unknown }) => {
-        const { id: _, goalId, ...rest } = r
-        return { ...rest, goalId: oldToNew.get(goalId as number) ?? goalId }
-      }),
-    )
-  })
+  const uid = getUid()
+  const goalsCol = collection(firestore, 'users', uid, 'goals')
+  const recordsCol = collection(firestore, 'users', uid, 'records')
+
+  // Delete existing data
+  const [existingGoals, existingRecords] = await Promise.all([
+    getDocs(goalsCol),
+    getDocs(recordsCol),
+  ])
+
+  const deleteBatch = writeBatch(firestore)
+  existingGoals.docs.forEach(d => deleteBatch.delete(d.ref))
+  existingRecords.docs.forEach(d => deleteBatch.delete(d.ref))
+  await deleteBatch.commit()
+
+  // Add goals and build ID mapping
+  const oldToNew = new Map<string, string>()
+  for (const goal of data.goals) {
+    const { id: oldId, ...rest } = goal as { id: string; [k: string]: unknown }
+    const ref = await addDoc(goalsCol, rest)
+    if (oldId) oldToNew.set(String(oldId), ref.id)
+  }
+
+  // Add records with remapped goalIds
+  for (const rec of data.records) {
+    const { id: _, goalId, ...rest } = rec as { id: string; goalId: string; [k: string]: unknown }
+    const mappedGoalId = oldToNew.get(String(goalId)) ?? goalId
+    await addDoc(recordsCol, { ...rest, goalId: mappedGoalId })
+  }
 }

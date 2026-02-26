@@ -1,59 +1,49 @@
 import { useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Plus, Pencil, MessageSquare, Trophy, XCircle } from 'lucide-react'
-import { db, type TrackingRecord } from '../db'
+import { type TrackingRecord, updateGoal } from '../db'
 import { calcPace, statusLabel, statusDescription, statusColor, statusBg } from '../lib/pace'
 import { getEffectiveDates } from '../lib/repeat'
 import { Sparkline } from '../components/Sparkline'
 import { AddRecordModal } from '../components/AddRecordModal'
 import { RecordEditModal } from '../components/RecordEditModal'
+import { useGoal, useRecordsByGoal } from '../hooks/useFirestoreQuery'
 
 export function GoalDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const goalId = Number(id)
+  const goalId = id!
   const [showAdd, setShowAdd] = useState(false)
   const [editingRecord, setEditingRecord] = useState<TrackingRecord | null>(null)
 
-  const goal = useLiveQuery(() => db.goals.get(goalId), [goalId])
+  const goal = useGoal(goalId)
   const dates = goal ? getEffectiveDates(goal) : null
-  const records = useLiveQuery(
-    () =>
-      dates
-        ? db.records
-            .where('goalId')
-            .equals(goalId)
-            .and(r => r.date >= dates.startDate && r.date <= dates.endDate)
-            .sortBy('createdAt')
-            .then(recs => recs.reverse())
-        : [],
-    [goalId, dates?.startDate, dates?.endDate],
-  )
+  const allRecords = useRecordsByGoal(goalId)
+  const records = allRecords && dates
+    ? allRecords
+        .filter(r => r.date >= dates.startDate && r.date <= dates.endDate)
+        .sort((a, b) => b.createdAt - a.createdAt)
+    : undefined
 
   const totalDone = records?.reduce((s, r) => s + r.count, 0) ?? 0
   const pace = goal && dates ? calcPace(goal.targetCount, totalDone, dates.startDate, dates.endDate) : null
 
   // Sparkline: last 14 days
-  const spark = useLiveQuery(() => {
+  const spark = (() => {
+    if (!allRecords) return null
     const days: string[] = []
     for (let i = 13; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
       days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     }
-    return db.records
-      .where('goalId')
-      .equals(goalId)
-      .and(r => days.includes(r.date))
-      .toArray()
-      .then(recs =>
-        days.map(day => recs.filter(r => r.date === day).reduce((s, r) => s + r.count, 0)),
-      )
-  }, [goalId])
+    return days.map(day =>
+      allRecords.filter(r => r.date === day).reduce((s, r) => s + r.count, 0),
+    )
+  })()
 
   const handleMarkResult = async (result: 'active' | 'completed' | 'missed') => {
-    await db.goals.update(goalId, { result })
+    await updateGoal(goalId, { result })
   }
 
   if (!goal || !pace) {

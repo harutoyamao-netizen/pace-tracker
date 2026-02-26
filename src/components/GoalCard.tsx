@@ -1,13 +1,13 @@
-import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, ChevronRight, Trophy, XCircle } from 'lucide-react'
-import { db, type Goal } from '../db'
+import { type Goal, addRecord } from '../db'
 import { calcPace, statusLabel, statusColor, statusBg } from '../lib/pace'
 import { getEffectiveDates } from '../lib/repeat'
 import { Sparkline } from './Sparkline'
+import { useRecordsByGoal } from '../hooks/useFirestoreQuery'
 
 interface Props {
   goal: Goal
-  onNavigate: (id: number) => void
+  onNavigate: (id: string) => void
 }
 
 export function GoalCard({ goal, onNavigate }: Props) {
@@ -15,43 +15,32 @@ export function GoalCard({ goal, onNavigate }: Props) {
   const unit = goal.unit || '回'
   const isFinished = goal.result === 'completed' || goal.result === 'missed'
 
-  const records = useLiveQuery(
-    () =>
-      db.records
-        .where('goalId')
-        .equals(goal.id!)
-        .and(r => r.date >= startDate && r.date <= endDate)
-        .toArray(),
-    [goal.id, startDate, endDate],
-  )
+  const allRecords = useRecordsByGoal(goal.id)
+  const records = allRecords?.filter(r => r.date >= startDate && r.date <= endDate)
 
   const totalDone = records?.reduce((s, r) => s + r.count, 0) ?? 0
   const pace = calcPace(goal.targetCount, totalDone, startDate, endDate)
 
   // Sparkline: last 7 days
-  const last7 = useLiveQuery(() => {
+  const last7 = (() => {
+    if (!allRecords) return null
     const days: string[] = []
     for (let i = 6; i >= 0; i--) {
       const d = new Date()
       d.setDate(d.getDate() - i)
       days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     }
-    return db.records
-      .where('goalId')
-      .equals(goal.id!)
-      .and(r => days.includes(r.date))
-      .toArray()
-      .then(recs => {
-        return days.map(day => recs.filter(r => r.date === day).reduce((s, r) => s + r.count, 0))
-      })
-  }, [goal.id])
+    return days.map(day =>
+      allRecords.filter(r => r.date === day).reduce((s, r) => s + r.count, 0),
+    )
+  })()
 
   const handleIncrement = async (e: React.MouseEvent) => {
     e.stopPropagation()
     const now = new Date()
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    await db.records.add({
-      goalId: goal.id!,
+    await addRecord({
+      goalId: goal.id,
       count: 1,
       date: today,
       memo: '',
@@ -61,7 +50,7 @@ export function GoalCard({ goal, onNavigate }: Props) {
 
   return (
     <div
-      onClick={() => onNavigate(goal.id!)}
+      onClick={() => onNavigate(goal.id)}
       className={`bg-[var(--color-surface)] rounded-2xl p-4 border border-[var(--color-border)] active:scale-[0.98] transition-transform cursor-pointer ${
         isFinished ? 'opacity-70' : ''
       }`}

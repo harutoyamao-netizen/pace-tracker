@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { db, type TrackingRecord } from '../db'
+import { type TrackingRecord, updateRecord, deleteRecord } from '../db'
 
 interface Props {
   record: TrackingRecord | null
@@ -25,12 +25,12 @@ export function RecordEditModal({ record, onClose }: Props) {
   const handleSave = async () => {
     const c = Number(count)
     if (!c || c < 1) return
-    await db.records.update(record.id!, { date, count: c, memo: memo.trim() })
+    await updateRecord(record.id, { date, count: c, memo: memo.trim() })
     onClose()
   }
 
   const handleDelete = async () => {
-    await db.records.delete(record.id!)
+    await deleteRecord(record.id)
     onClose()
   }
 

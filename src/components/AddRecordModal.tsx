@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
-import { db } from '../db'
+import { addRecord } from '../db'
 
 interface Props {
-  goalId: number
+  goalId: string
   unit: string
   onClose: () => void
 }
@@ -19,7 +19,7 @@ export function AddRecordModal({ goalId, unit, onClose }: Props) {
   const handleSave = async () => {
     const c = Number(count)
     if (!c || c < 1) return
-    await db.records.add({
+    await addRecord({
       goalId,
       count: c,
       date,
