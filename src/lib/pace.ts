@@ -29,14 +29,16 @@ export function calcPace(
   const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000))
   const elapsedMs = now.getTime() - start.getTime()
   const elapsedDays = Math.max(0, Math.floor(elapsedMs / 86400000))
-  const remainingDays = Math.max(0, totalDays - elapsedDays)
+  // For pace calculation: count "today" as day 1 once we've passed the start date
+  const elapsedForPace = elapsedMs > 0 ? Math.max(1, elapsedDays) : 0
+  const remainingDays = Math.max(0, totalDays - elapsedForPace)
   const remaining = Math.max(0, targetCount - totalDone)
   const progress = targetCount > 0 ? Math.min(1, totalDone / targetCount) : 0
   const isOverdue = now.getTime() > end.getTime()
 
-  const expectedByNow = totalDays > 0 ? (targetCount / totalDays) * elapsedDays : targetCount
+  const expectedByNow = totalDays > 0 ? (targetCount / totalDays) * elapsedForPace : targetCount
   const dailyNeeded = remainingDays > 0 ? remaining / remainingDays : remaining
-  const currentPace = elapsedDays > 0 ? totalDone / elapsedDays : 0
+  const currentPace = elapsedForPace > 0 ? totalDone / elapsedForPace : 0
 
   // Predicted completion date
   let predictedEndDate: string | null = null
@@ -69,7 +71,7 @@ export function calcPace(
     targetCount,
     remaining,
     totalDays,
-    elapsedDays,
+    elapsedDays: elapsedForPace,
     remainingDays,
     expectedByNow: Math.round(expectedByNow * 10) / 10,
     dailyNeeded: Math.round(dailyNeeded * 10) / 10,
