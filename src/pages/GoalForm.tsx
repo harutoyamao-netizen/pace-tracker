@@ -5,6 +5,8 @@ import { db, type Goal } from '../db'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
+const unitPresets = ['回', 'ページ', '冊', '問', 'km', '分', '時間', '個']
+
 export function GoalForm() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -12,6 +14,7 @@ export function GoalForm() {
 
   const [name, setName] = useState('')
   const [targetCount, setTargetCount] = useState('')
+  const [unit, setUnit] = useState('回')
   const [startDate, setStartDate] = useState(today())
   const [endDate, setEndDate] = useState('')
   const [repeat, setRepeat] = useState<Goal['repeat']>('none')
@@ -22,6 +25,7 @@ export function GoalForm() {
         if (g) {
           setName(g.name)
           setTargetCount(String(g.targetCount))
+          setUnit(g.unit || '回')
           setStartDate(g.startDate)
           setEndDate(g.endDate)
           setRepeat(g.repeat)
@@ -42,6 +46,7 @@ export function GoalForm() {
       await db.goals.update(Number(id), {
         name: name.trim(),
         targetCount: count,
+        unit,
         startDate,
         endDate: effectiveEnd,
         repeat,
@@ -50,9 +55,11 @@ export function GoalForm() {
       await db.goals.add({
         name: name.trim(),
         targetCount: count,
+        unit,
         startDate,
         endDate: effectiveEnd,
         repeat,
+        result: 'active',
         createdAt: Date.now(),
       })
     }
@@ -96,19 +103,38 @@ export function GoalForm() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1.5 text-[var(--color-text-secondary)]">
-            目標回数
-          </label>
-          <input
-            type="number"
-            value={targetCount}
-            onChange={e => setTargetCount(e.target.value)}
-            placeholder="100"
-            min="1"
-            required
-            className={inputClass}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-[var(--color-text-secondary)]">
+              目標回数
+            </label>
+            <input
+              type="number"
+              value={targetCount}
+              onChange={e => setTargetCount(e.target.value)}
+              placeholder="100"
+              min="1"
+              required
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5 text-[var(--color-text-secondary)]">
+              単位
+            </label>
+            <input
+              type="text"
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+              placeholder="回"
+              required
+              className={inputClass}
+              list="unit-presets"
+            />
+            <datalist id="unit-presets">
+              {unitPresets.map(u => <option key={u} value={u} />)}
+            </datalist>
+          </div>
         </div>
 
         <div>

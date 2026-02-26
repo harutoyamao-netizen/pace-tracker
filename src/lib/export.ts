@@ -23,12 +23,13 @@ export async function exportCSV() {
   const records = await db.records.toArray()
   const goalMap = new Map(goals.map(g => [g.id, g.name]))
 
-  const header = 'date,goal_name,count'
+  const header = 'date,goal_name,count,memo'
   const rows = records
     .sort((a, b) => a.date.localeCompare(b.date))
     .map(r => {
       const name = (goalMap.get(r.goalId) ?? '').replace(/"/g, '""')
-      return `${r.date},"${name}",${r.count}`
+      const memo = (r.memo || '').replace(/"/g, '""')
+      return `${r.date},"${name}",${r.count},"${memo}"`
     })
 
   const timestamp = new Date().toISOString().slice(0, 10)

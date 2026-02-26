@@ -1,18 +1,22 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Pencil, Minus } from 'lucide-react'
-import { db } from '../db'
-import { calcPace, statusLabel, statusColor, statusBg } from '../lib/pace'
+import { ArrowLeft, Plus, Pencil, MessageSquare, Trophy, XCircle } from 'lucide-react'
+import { db, type TrackingRecord } from '../db'
+import { calcPace, statusLabel, statusDescription, statusColor, statusBg } from '../lib/pace'
 import { getEffectiveDates } from '../lib/repeat'
 import { Sparkline } from '../components/Sparkline'
+import { AddRecordModal } from '../components/AddRecordModal'
+import { RecordEditModal } from '../components/RecordEditModal'
 
 export function GoalDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const goalId = Number(id)
+  const [showAdd, setShowAdd] = useState(false)
+  const [editingRecord, setEditingRecord] = useState<TrackingRecord | null>(null)
 
   const goal = useLiveQuery(() => db.goals.get(goalId), [goalId])
-
   const dates = goal ? getEffectiveDates(goal) : null
   const records = useLiveQuery(
     () =>
@@ -48,13 +52,8 @@ export function GoalDetail() {
       )
   }, [goalId])
 
-  const handleIncrement = async () => {
-    const today = new Date().toISOString().slice(0, 10)
-    await db.records.add({ goalId, count: 1, date: today, createdAt: Date.now() })
-  }
-
-  const handleDeleteRecord = async (recordId: number) => {
-    await db.records.delete(recordId)
+  const handleMarkResult = async (result: 'active' | 'completed' | 'missed') => {
+    await db.goals.update(goalId, { result })
   }
 
   if (!goal || !pace) {
@@ -65,13 +64,28 @@ export function GoalDetail() {
     )
   }
 
+  const unit = goal.unit || '回'
+  const isFinished = goal.result === 'completed' || goal.result === 'missed'
+
   // Group records by date
-  const grouped = new Map<string, typeof records>()
+  const grouped = new Map<string, TrackingRecord[]>()
   for (const rec of records ?? []) {
     const arr = grouped.get(rec.date) ?? []
     arr.push(rec)
     grouped.set(rec.date, arr)
   }
+
+  // Prediction message
+  const predictionMsg = (() => {
+    if (pace.remaining <= 0) return '目標を達成しました！'
+    if (!pace.predictedEndDate) return 'まだ記録がありません。最初の一歩を踏み出しましょう。'
+    const endD = new Date(goal.endDate + 'T23:59:59')
+    const predD = new Date(pace.predictedEndDate + 'T00:00:00')
+    if (predD <= endD) {
+      return `このペースなら ${formatDateShort(pace.predictedEndDate)} 頃に達成見込みです。`
+    }
+    return `このペースだと期限に間に合いません。1日あたり ${pace.dailyNeeded}${unit} が必要です。`
+  })()
 
   return (
     <div className="min-h-full pb-28">
@@ -93,16 +107,45 @@ export function GoalDetail() {
       </header>
 
       <div className="px-4 space-y-5">
-        {/* Status badge */}
-        <div className="flex items-center gap-3">
-          <span
-            className={`px-3 py-1 rounded-full text-sm font-semibold text-white ${statusBg[pace.status]}`}
-          >
-            {statusLabel[pace.status]}
-          </span>
-          {pace.remaining <= 0 && (
-            <span className="text-sm font-semibold text-emerald-500">達成!</span>
-          )}
+        {/* Result badge for finished goals */}
+        {isFinished && (
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-xl ${
+            goal.result === 'completed'
+              ? 'bg-emerald-500/10 text-emerald-500'
+              : 'bg-red-400/10 text-red-400'
+          }`}>
+            {goal.result === 'completed' ? <Trophy size={18} /> : <XCircle size={18} />}
+            <span className="font-semibold text-sm">
+              {goal.result === 'completed' ? '達成！' : '未達成'}
+            </span>
+            <button
+              onClick={() => handleMarkResult('active' as 'completed')}
+              className="ml-auto text-xs underline opacity-60"
+            >
+              取消
+            </button>
+          </div>
+        )}
+
+        {/* Status badge + description */}
+        {!isFinished && (
+          <div>
+            <div className="flex items-center gap-3 mb-1.5">
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold text-white ${statusBg[pace.status]}`}>
+                {statusLabel[pace.status]}
+              </span>
+            </div>
+            <p className="text-sm text-[var(--color-text-secondary)]">
+              {statusDescription[pace.status]}
+            </p>
+          </div>
+        )}
+
+        {/* Prediction */}
+        <div className="bg-[var(--color-surface)] rounded-xl p-3 border border-[var(--color-border)]">
+          <p className={`text-sm font-medium ${pace.remaining <= 0 ? 'text-emerald-500' : statusColor[pace.status]}`}>
+            {predictionMsg}
+          </p>
         </div>
 
         {/* Progress */}
@@ -110,7 +153,7 @@ export function GoalDetail() {
           <div className="flex justify-between text-sm mb-1.5">
             <span className="text-[var(--color-text-secondary)]">進捗</span>
             <span className="font-semibold">
-              {totalDone} / {goal.targetCount}
+              {totalDone} / {goal.targetCount} {unit}
             </span>
           </div>
           <div className="w-full h-3 bg-[var(--color-border)] rounded-full overflow-hidden">
@@ -123,14 +166,14 @@ export function GoalDetail() {
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-3">
-          <StatBox label="残り回数" value={pace.remaining} />
+          <StatBox label="残り" value={`${pace.remaining} ${unit}`} />
           <StatBox label="残り日数" value={`${pace.remainingDays}日`} />
           <StatBox
             label="現在のペース"
-            value={`${pace.currentPace}/日`}
+            value={`${pace.currentPace}${unit}/日`}
             className={statusColor[pace.status]}
           />
-          <StatBox label="必要ペース" value={`${pace.dailyNeeded}/日`} />
+          <StatBox label="必要ペース" value={`${pace.dailyNeeded}${unit}/日`} />
         </div>
 
         {/* Sparkline */}
@@ -143,6 +186,32 @@ export function GoalDetail() {
               <Sparkline data={spark} width={280} height={48} />
             </div>
           </div>
+        )}
+
+        {/* Mark completed/missed */}
+        {!isFinished && pace.isOverdue && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleMarkResult('completed')}
+              className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition-transform"
+            >
+              <Trophy size={15} /> 達成
+            </button>
+            <button
+              onClick={() => handleMarkResult('missed')}
+              className="flex-1 py-2.5 rounded-xl bg-red-400 text-white text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition-transform"
+            >
+              <XCircle size={15} /> 未達成
+            </button>
+          </div>
+        )}
+        {!isFinished && !pace.isOverdue && pace.remaining <= 0 && (
+          <button
+            onClick={() => handleMarkResult('completed')}
+            className="w-full py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97] transition-transform"
+          >
+            <Trophy size={15} /> 目標達成としてマーク
+          </button>
         )}
 
         {/* History */}
@@ -159,21 +228,29 @@ export function GoalDetail() {
                 key={date}
                 className="bg-[var(--color-surface)] rounded-xl p-3 border border-[var(--color-border)]"
               >
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm font-medium">{formatDate(date)}</span>
                   <span className="text-sm text-[var(--color-text-secondary)]">
-                    {recs!.reduce((s, r) => s + r.count, 0)} 回
+                    +{recs.reduce((s, r) => s + r.count, 0)} {unit}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {recs!.map(rec => (
+                <div className="space-y-1">
+                  {recs.map(rec => (
                     <button
                       key={rec.id}
-                      onClick={() => handleDeleteRecord(rec.id!)}
-                      className="inline-flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full bg-[var(--color-border)] text-[var(--color-text-secondary)] active:bg-red-100 active:text-red-500 transition-colors"
+                      onClick={() => setEditingRecord(rec)}
+                      className="w-full flex items-center gap-2 text-left px-2 py-1.5 rounded-lg hover:bg-[var(--color-border)] transition-colors"
                     >
-                      <Minus size={10} />
-                      {rec.count}
+                      <span className="text-xs font-semibold text-[var(--color-primary)]">
+                        +{rec.count}
+                      </span>
+                      {rec.memo && (
+                        <span className="flex items-center gap-0.5 text-xs text-[var(--color-text-secondary)] truncate">
+                          <MessageSquare size={10} />
+                          {rec.memo}
+                        </span>
+                      )}
+                      <Pencil size={10} className="ml-auto text-[var(--color-text-secondary)] opacity-40 shrink-0" />
                     </button>
                   ))}
                 </div>
@@ -183,15 +260,23 @@ export function GoalDetail() {
         </div>
       </div>
 
-      {/* Floating increment button */}
-      <div className="fixed bottom-6 left-0 right-0 flex justify-center z-20">
-        <button
-          onClick={handleIncrement}
-          className="flex items-center gap-2 px-6 py-3 rounded-full bg-[var(--color-primary)] text-white font-semibold shadow-xl active:scale-95 transition-transform"
-        >
-          <Plus size={20} /> 記録する
-        </button>
-      </div>
+      {/* Floating add button */}
+      {!isFinished && (
+        <div className="fixed bottom-6 left-0 right-0 flex justify-center z-20">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-6 py-3 rounded-full bg-[var(--color-primary)] text-white font-semibold shadow-xl active:scale-95 transition-transform"
+          >
+            <Plus size={20} /> 記録する
+          </button>
+        </div>
+      )}
+
+      {/* Modals */}
+      {showAdd && (
+        <AddRecordModal goalId={goalId} unit={unit} onClose={() => setShowAdd(false)} />
+      )}
+      <RecordEditModal record={editingRecord} onClose={() => setEditingRecord(null)} />
     </div>
   )
 }
@@ -217,4 +302,9 @@ function formatDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
   const weekdays = ['日', '月', '火', '水', '木', '金', '土']
   return `${d.getMonth() + 1}/${d.getDate()} (${weekdays[d.getDay()]})`
+}
+
+function formatDateShort(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${d.getMonth() + 1}月${d.getDate()}日`
 }

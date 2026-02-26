@@ -12,6 +12,8 @@ export interface PaceInfo {
   currentPace: number
   status: PaceStatus
   progress: number // 0-1
+  predictedEndDate: string | null // YYYY-MM-DD or null
+  isOverdue: boolean
 }
 
 export function calcPace(
@@ -30,10 +32,22 @@ export function calcPace(
   const remainingDays = Math.max(0, totalDays - elapsedDays)
   const remaining = Math.max(0, targetCount - totalDone)
   const progress = targetCount > 0 ? Math.min(1, totalDone / targetCount) : 0
+  const isOverdue = now.getTime() > end.getTime()
 
   const expectedByNow = totalDays > 0 ? (targetCount / totalDays) * elapsedDays : targetCount
   const dailyNeeded = remainingDays > 0 ? remaining / remainingDays : remaining
   const currentPace = elapsedDays > 0 ? totalDone / elapsedDays : 0
+
+  // Predicted completion date
+  let predictedEndDate: string | null = null
+  if (currentPace > 0 && remaining > 0) {
+    const daysToFinish = Math.ceil(remaining / currentPace)
+    const predicted = new Date(now)
+    predicted.setDate(predicted.getDate() + daysToFinish)
+    predictedEndDate = predicted.toISOString().slice(0, 10)
+  } else if (remaining <= 0) {
+    predictedEndDate = now.toISOString().slice(0, 10)
+  }
 
   const idealPace = targetCount / totalDays
   let status: PaceStatus
@@ -62,6 +76,8 @@ export function calcPace(
     currentPace: Math.round(currentPace * 10) / 10,
     status,
     progress,
+    predictedEndDate,
+    isOverdue,
   }
 }
 
@@ -71,6 +87,14 @@ export const statusLabel: Record<PaceStatus, string> = {
   'on-track': '順調',
   'slightly-slow': '遅め',
   'slow': '遅い',
+}
+
+export const statusDescription: Record<PaceStatus, string> = {
+  'fast': '目標より大幅に先行しています。ペースを落としても大丈夫。',
+  'slightly-fast': 'やや先行中。このまま快適に続けましょう。',
+  'on-track': '理想的なペースです。この調子を維持しましょう。',
+  'slightly-slow': 'やや遅れ気味。少しだけ頑張りましょう。',
+  'slow': '遅れています。小さな一歩から巻き返しましょう。',
 }
 
 export const statusColor: Record<PaceStatus, string> = {

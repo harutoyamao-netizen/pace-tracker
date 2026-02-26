@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Moon, Sun, Download, Upload, MoreVertical } from 'lucide-react'
+import { Plus, Moon, Sun, Download, Upload, MoreVertical, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { db } from '../db'
 import { GoalCard } from '../components/GoalCard'
@@ -16,15 +16,19 @@ interface Props {
 export function Home({ dark, toggleDark }: Props) {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [showFinished, setShowFinished] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const goals = useLiveQuery(() => db.goals.orderBy('createdAt').toArray())
   const allRecords = useLiveQuery(() => db.records.toArray())
 
-  // 今日やるべき回数のサマリー
+  const activeGoals = goals?.filter(g => g.result === 'active' || !g.result) ?? []
+  const finishedGoals = goals?.filter(g => g.result === 'completed' || g.result === 'missed') ?? []
+
+  // Today summary (active goals only)
   const todaySummary = (() => {
     if (!goals || !allRecords) return null
     let totalNeeded = 0
-    for (const goal of goals) {
+    for (const goal of activeGoals) {
       const { startDate, endDate } = getEffectiveDates(goal)
       const recs = allRecords.filter(
         r => r.goalId === goal.id && r.date >= startDate && r.date <= endDate,
@@ -97,9 +101,9 @@ export function Home({ dark, toggleDark }: Props) {
             <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
           </div>
         </div>
-        {todaySummary !== null && goals && goals.length > 0 && (
+        {todaySummary !== null && activeGoals.length > 0 && (
           <p className="text-sm text-[var(--color-text-secondary)]">
-            今日のノルマ: <span className="font-semibold text-[var(--color-text)]">{todaySummary}</span> 回
+            今日のノルマ: <span className="font-semibold text-[var(--color-text)]">{todaySummary}</span> 件
           </p>
         )}
       </header>
@@ -112,9 +116,27 @@ export function Home({ dark, toggleDark }: Props) {
             <p className="text-sm">右下の＋ボタンから追加しましょう</p>
           </div>
         )}
-        {goals?.map(goal => (
+
+        {/* Active goals */}
+        {activeGoals.map(goal => (
           <GoalCard key={goal.id} goal={goal} onNavigate={id => navigate(`/goal/${id}`)} />
         ))}
+
+        {/* Finished goals */}
+        {finishedGoals.length > 0 && (
+          <>
+            <button
+              onClick={() => setShowFinished(v => !v)}
+              className="flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)] pt-2"
+            >
+              <ChevronDown size={14} className={`transition-transform ${showFinished ? 'rotate-180' : ''}`} />
+              完了した目標 ({finishedGoals.length})
+            </button>
+            {showFinished && finishedGoals.map(goal => (
+              <GoalCard key={goal.id} goal={goal} onNavigate={id => navigate(`/goal/${id}`)} />
+            ))}
+          </>
+        )}
       </main>
 
       {/* FAB */}
