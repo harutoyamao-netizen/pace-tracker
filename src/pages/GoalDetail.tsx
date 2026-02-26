@@ -21,14 +21,14 @@ export function GoalDetail() {
             .where('goalId')
             .equals(goalId)
             .and(r => r.date >= dates.startDate && r.date <= dates.endDate)
-            .reverse()
             .sortBy('createdAt')
+            .then(recs => recs.reverse())
         : [],
     [goalId, dates?.startDate, dates?.endDate],
   )
 
   const totalDone = records?.reduce((s, r) => s + r.count, 0) ?? 0
-  const pace = dates ? calcPace(goal!.targetCount, totalDone, dates.startDate, dates.endDate) : null
+  const pace = goal && dates ? calcPace(goal.targetCount, totalDone, dates.startDate, dates.endDate) : null
 
   // Sparkline: last 14 days
   const spark = useLiveQuery(() => {

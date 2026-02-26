@@ -25,7 +25,8 @@ export function calcPace(
   const end = new Date(endDate + 'T23:59:59')
 
   const totalDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / 86400000))
-  const elapsedDays = Math.max(0, Math.ceil((now.getTime() - start.getTime()) / 86400000))
+  const elapsedMs = now.getTime() - start.getTime()
+  const elapsedDays = Math.max(0, Math.floor(elapsedMs / 86400000))
   const remainingDays = Math.max(0, totalDays - elapsedDays)
   const remaining = Math.max(0, targetCount - totalDone)
   const progress = targetCount > 0 ? Math.min(1, totalDone / targetCount) : 0

@@ -10,7 +10,7 @@ export interface Goal {
   createdAt: number
 }
 
-export interface Record {
+export interface TrackingRecord {
   id?: number
   goalId: number
   count: number
@@ -20,12 +20,12 @@ export interface Record {
 
 const db = new Dexie('PaceTrackerDB') as Dexie & {
   goals: EntityTable<Goal, 'id'>
-  records: EntityTable<Record, 'id'>
+  records: EntityTable<TrackingRecord, 'id'>
 }
 
 db.version(1).stores({
   goals: '++id, name, createdAt',
-  records: '++id, goalId, date, createdAt',
+  records: '++id, goalId, date, createdAt, [goalId+date]',
 })
 
 export { db }

@@ -32,19 +32,29 @@ export function GoalForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const data = {
-      name: name.trim(),
-      targetCount: Number(targetCount),
-      startDate,
-      endDate: endDate || startDate,
-      repeat,
-      createdAt: Date.now(),
-    }
+    const count = Number(targetCount)
+    if (!count || count < 1) return
+
+    const effectiveEnd = endDate || startDate
+    if (repeat === 'none' && effectiveEnd < startDate) return
 
     if (isEdit) {
-      await db.goals.update(Number(id), data)
+      await db.goals.update(Number(id), {
+        name: name.trim(),
+        targetCount: count,
+        startDate,
+        endDate: effectiveEnd,
+        repeat,
+      })
     } else {
-      await db.goals.add(data)
+      await db.goals.add({
+        name: name.trim(),
+        targetCount: count,
+        startDate,
+        endDate: effectiveEnd,
+        repeat,
+        createdAt: Date.now(),
+      })
     }
     navigate('/', { replace: true })
   }
@@ -139,6 +149,7 @@ export function GoalForm() {
                 type="date"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
+                min={startDate}
                 required
                 className={inputClass}
               />

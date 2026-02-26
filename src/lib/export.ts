@@ -39,26 +39,30 @@ export async function importJSON(file: File) {
   const text = await file.text()
   const data = JSON.parse(text)
 
-  if (!data.goals || !data.records) {
+  if (!Array.isArray(data.goals) || !Array.isArray(data.records)) {
     throw new Error('Invalid file format')
   }
 
   await db.transaction('rw', db.goals, db.records, async () => {
     await db.goals.clear()
     await db.records.clear()
-    await db.goals.bulkAdd(data.goals.map((g: Record<string, unknown>) => {
-      const { id: _, ...rest } = g
-      return rest
-    }))
-    // Re-map goal IDs after import
-    const newGoals = await db.goals.toArray()
+    const addedIds = await db.goals.bulkAdd(
+      data.goals.map((g: { id?: unknown; [k: string]: unknown }) => {
+        const { id: _, ...rest } = g
+        return rest
+      }),
+      { allKeys: true },
+    )
+    // Re-map goal IDs using bulkAdd return values
     const oldToNew = new Map<number, number>()
     data.goals.forEach((old: { id: number }, i: number) => {
-      if (newGoals[i]) oldToNew.set(old.id, newGoals[i].id!)
+      if (addedIds[i] != null) oldToNew.set(old.id, addedIds[i] as number)
     })
-    await db.records.bulkAdd(data.records.map((r: Record<string, unknown>) => {
-      const { id: _, goalId, ...rest } = r
-      return { ...rest, goalId: oldToNew.get(goalId as number) ?? goalId }
-    }))
+    await db.records.bulkAdd(
+      data.records.map((r: { id?: unknown; goalId?: unknown; [k: string]: unknown }) => {
+        const { id: _, goalId, ...rest } = r
+        return { ...rest, goalId: oldToNew.get(goalId as number) ?? goalId }
+      }),
+    )
   })
 }
